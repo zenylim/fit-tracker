@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fit Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f5bff">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#eef1f5;--card:#fff;--ink:#14213d;--mute:#5d6b86;--line:#dbe1ea;--acc:#2f5bff;--acc-ink:#fff;--good:#14946a;--warn:#d98a1c;--bad:#cf3b4a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1626;--card:#18223a;--ink:#e8edf8;--mute:#93a1c0;--line:#27345a;--acc:#6f8cff;--acc-ink:#0f1626;--good:#3ecf9b;--warn:#f0b04a;--bad:#ff6b79}}
+:root[data-theme="dark"]{--bg:#0f1626;--card:#18223a;--ink:#e8edf8;--mute:#93a1c0;--line:#27345a;--acc:#6f8cff;--acc-ink:#0f1626;--good:#3ecf9b;--warn:#f0b04a;--bad:#ff6b79}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Barlow,system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:640px;margin:0 auto;padding:12px 14px 96px}
+h1,h2,.num{font-family:'Barlow Condensed','Arial Narrow',Impact,sans-serif;font-weight:700;letter-spacing:.01em}
+h2{font-size:22px;margin:20px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0}
+.hero{display:flex;gap:10px}
+.hero>div{flex:1;background:var(--acc);color:var(--acc-ink);border-radius:12px;padding:12px 14px}
+.hero .num{font-size:42px;line-height:1}
+.hero small{display:block;opacity:.85}
+.top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:6px 0}
+.top input{flex:1;text-align:center}
+.row{display:flex;gap:8px;align-items:flex-end;margin:8px 0;flex-wrap:wrap}
+.row>label{flex:1;min-width:84px;font-size:13px;color:var(--mute)}
+input{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-top:3px}
+input:focus-visible,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:9px 14px;background:var(--acc);color:var(--acc-ink);cursor:pointer}
+button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line);padding:8px 12px}
+button.x{background:none;color:var(--mute);padding:2px 8px;font-size:18px}
+.bar{height:12px;background:var(--bg);border-radius:6px;overflow:hidden;margin:5px 0 2px}
+.bar i{display:block;height:100%;background:var(--acc);border-radius:6px}
+.bar i.good{background:var(--good)}.bar i.warn{background:var(--warn)}.bar i.bad{background:var(--bad)}
+.lbl{display:flex;justify-content:space-between;font-size:14px}
+.mute{color:var(--mute);font-size:14px}
+.li{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.pr{background:var(--good);color:var(--bg);font-size:12px;padding:1px 6px;border-radius:6px;margin-left:6px}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom,0px)}
+nav button{flex:1;background:none;color:var(--mute);border-radius:0;padding:14px 4px}
+nav button.on{color:var(--acc);box-shadow:inset 0 3px 0 var(--acc)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:80px;margin-top:8px}
+.bars b{flex:1;background:var(--acc);border-radius:3px 3px 0 0;min-height:2px}
+.bars b.over{background:var(--warn)}.bars b.hit{background:var(--good)}
+svg{width:100%;height:auto;display:block}
+.ax{stroke:var(--line)}.ln{stroke:var(--acc);fill:none;stroke-width:2.5}.gl{stroke:var(--good);stroke-dasharray:5 4}.dt{fill:var(--acc)}.tx{fill:var(--mute);font-size:11px}
+.scroll{overflow-x:auto}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<nav id="nav"></nav>
+<script>
+const K='fittracker1';
+let S=null;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
+S=S||{goals:{},days:{},plan:[],sess:{}};
+const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
+const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const parse=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
+const today=iso(new Date());let cur=today,tab='today';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const val=id=>{const e=$(id);if(!e||e.value==='')return null;const n=parseFloat(e.value);return isNaN(n)?null:n};
+const gd=d=>S.days[d]||{meals:[]};
+const setDay=d=>S.days[d]||(S.days[d]={meals:[]});
+const eaten=d=>(gd(d).meals||[]).reduce((a,m)=>a+m.k,0);
+const dates=()=>Object.keys(S.days).sort();
+function latest(k){const ds=dates().reverse();for(const d of ds){if(S.days[d][k]!=null)return S.days[d][k]}return null}
+const fmt=n=>n==null?'–':(Math.round(n*10)/10).toString();
+const G=()=>S.goals;
+function daysLeft(){if(!G().date)return null;return Math.max(0,Math.ceil((parse(G().date)-parse(today))/864e5))}
+
+function bar(l,v,t,u,mode){
+  const p=t?Math.min(100,v/t*100):0;let c='';
+  if(mode==='cal')c=v>t?'bad':(p>=85?'good':'');
+  else c=p>=100?'good':'';
+  return `<div class="lbl"><span>${l}</span><span>${Math.round(v).toLocaleString()} / ${t?Math.round(t).toLocaleString():'set goal'} ${u}</span></div><div class="bar"><i class="${c}" style="width:${p}%"></i></div>`}
+const inp=(id,l,v,st,ph)=>`<label>${l}<input id="${id}" type="number" inputmode="decimal" step="${st||'any'}" value="${v==null?'':v}" placeholder="${ph||''}"></label>`;
+
+function viewToday(){
+  const g=G(),d=gd(cur),dl=daysLeft(),w=latest('weight');
+  let h='';
+  const togo=(g.weight!=null&&w!=null)?w-g.weight:null;
+  const wk=(togo!=null&&dl)?togo/dl*7:null;
+  h+=`<div class="hero"><div><span class="num">${dl==null?'–':dl}</span><small>days to goal date</small></div><div><span class="num">${togo==null?'–':fmt(Math.abs(togo))}</span><small>kg ${togo!=null&&togo<0?'past goal':'to go'}</small></div></div>`;
+  if(wk!=null&&dl>0)h+=`<p class="mute">Pace needed: ${fmt(Math.abs(wk))} kg per week ${wk>0?'loss':'gain'}. ${Math.abs(wk)>1?'That is aggressive; consider a later date or a smaller target.':''}</p>`;
+  if(!g.weight&&!g.cal)h+=`<div class="card">Start in <b>Goals</b> to set your targets and deadline.</div>`;
+  h+=`<div class="top"><button class="ghost" data-act="prev">‹</button><input type="date" id="dt" value="${cur}" data-act="date"><button class="ghost" data-act="next">›</button></div>`;
+  h+=`<div class="card">${bar('Calories',eaten(cur),g.cal,'kcal','cal')}${bar('Steps',d.steps||0,g.steps,'steps')}</div>`;
+  h+=`<div class="card"><b>Daily stats</b><div class="row">${inp('w','Weight (kg)',d.weight,0.1)}${inp('s','Steps',d.steps,1)}</div><div class="row">${inp('f','Body fat %',d.fat,0.1)}${inp('m','Muscle %',d.muscle,0.1)}<button data-act="saveStats">Save</button></div></div>`;
+  h+=`<div class="card"><b>Food log</b><div class="row"><label>Food<input id="ml" placeholder="e.g. Chicken rice"></label>${inp('mk','kcal',null,1)}<button data-act="addMeal">Add</button></div>`;
+  (d.meals||[]).forEach((m,i)=>h+=`<div class="li"><span>${esc(m.l||'Food')}</span><span>${m.k} kcal <button class="x" data-act="delMeal" data-i="${i}" aria-label="Delete">×</button></span></div>`);
+  if(!(d.meals||[]).length)h+=`<p class="mute">Nothing logged yet. Add your first meal.</p>`;
+  return h+'</div>'}
+
+function lastSession(id){const ds=Object.keys(S.sess).filter(x=>x<cur&&(S.sess[x][id]||[]).length).sort();return ds.length?{d:ds[ds.length-1],sets:S.sess[ds[ds.length-1]][id]}:null}
+function priorMax(id){let m=0;for(const x in S.sess)if(x<cur)(S.sess[x][id]||[]).forEach(s=>{if(s.w>m)m=s.w});return m}
+
+function viewGym(){
+  let h=`<div class="top"><button class="ghost" data-act="prev">‹</button><input type="date" id="dt" value="${cur}" data-act="date"><button class="ghost" data-act="next">›</button></div>`;
+  if(!S.plan.length)h+=`<div class="card">No exercises yet. Add your first one below, with the sets, reps and weight you are aiming for.</div>`;
+  S.plan.forEach(e=>{
+    const sets=(S.sess[cur]||{})[e.id]||[],ls=lastSession(e.id),pm=priorMax(e.id);
+    const done=sets.length;
+    h+=`<div class="card"><div class="lbl"><b>${esc(e.name)}</b><span class="mute">Goal ${e.sets}×${e.reps} @ ${fmt(e.wt)} kg</span></div>`;
+    h+=`<div class="bar"><i class="${done>=e.sets?'good':''}" style="width:${Math.min(100,done/e.sets*100)}%"></i></div><div class="mute">${done}/${e.sets} sets${ls?` · Last (${ls.d.slice(5)}): ${ls.sets.map(s=>s.w+'×'+s.r).join(', ')}`:''}</div>`;
+    sets.forEach((s,i)=>h+=`<div class="li"><span>Set ${i+1}: ${s.w} kg × ${s.r}${pm>0&&s.w>pm?'<span class="pr">PR</span>':''}</span><button class="x" data-act="delSet" data-id="${e.id}" data-i="${i}" aria-label="Delete set">×</button></div>`);
+    const lastSet=sets[sets.length-1]||(ls&&ls.sets[0]);
+    h+=`<div class="row">${inp('sw'+e.id,'Weight (kg)',lastSet?lastSet.w:e.wt,0.5)}${inp('sr'+e.id,'Reps',lastSet?lastSet.r:e.reps,1)}<button data-act="addSet" data-id="${e.id}">Log set</button></div>`;
+    h+=`<button class="ghost" data-act="delEx" data-id="${e.id}">Remove exercise</button></div>`});
+  h+=`<div class="card"><b>Add exercise</b><div class="row"><label>Name<input id="en" placeholder="e.g. Bench press"></label></div><div class="row">${inp('es','Goal sets',null,1)}${inp('er','Goal reps',null,1)}${inp('ew','Goal kg',null,0.5)}<button data-act="addEx">Add</button></div></div>`;
+  return h}
+
+function viewGoals(){
+  const g=G();
+  return `<h2>Your targets</h2><div class="card"><div class="row">${inp('gw','Goal weight (kg)',g.weight,0.1)}${inp('gsw','Start weight (kg)',g.start!=null?g.start:latest('weight'),0.1)}</div>
+  <div class="row">${inp('gc','Daily calories',g.cal,1)}${inp('gs','Daily steps',g.steps,1)}</div>
+  <div class="row">${inp('gf','Body fat % goal',g.fat,0.1)}${inp('gm','Muscle % goal',g.muscle,0.1)}</div>
+  <div class="row"><label>Goal date<input id="gdt" type="date" value="${g.date||iso(new Date(new Date().getFullYear(),new Date().getMonth()+1,0))}"></label><button data-act="saveGoals">Save goals</button></div>
+  <p class="mute">Set the sets, reps and weight targets for each lift in the Gym tab.</p></div>
+  <div class="card"><b>Where you are now</b><div class="lbl"><span>Weight</span><span>${fmt(latest('weight'))} → ${fmt(g.weight)} kg</span></div><div class="lbl"><span>Body fat</span><span>${fmt(latest('fat'))} → ${fmt(g.fat)} %</span></div><div class="lbl"><span>Muscle</span><span>${fmt(latest('muscle'))} → ${fmt(g.muscle)} %</span></div></div>
+  <button class="ghost" data-act="wipe">Reset all data</button>`}
+
+function chart(key,goal,unit){
+  const pts=dates().filter(d=>S.days[d][key]!=null).slice(-30).map(d=>({d,v:S.days[d][key]}));
+  if(pts.length<2)return `<p class="mute">Log ${key==='weight'?'weight':key} on at least two days to see your trend.</p>`;
+  const vs=pts.map(p=>p.v).concat(goal!=null?[goal]:[]);let lo=Math.min(...vs),hi=Math.max(...vs);if(hi-lo<1){hi+=.5;lo-=.5}
+  const pad=(hi-lo)*.12;lo-=pad;hi+=pad;const W=600,H=200,L=36,R=10,T=10,B=22;
+  const x=i=>L+i*(W-L-R)/(pts.length-1),y=v=>T+(hi-v)/(hi-lo)*(H-T-B);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${key} trend"><line class="ax" x1="${L}" x2="${W-R}" y1="${H-B}" y2="${H-B}"/>`;
+  [lo+pad,(lo+hi)/2,hi-pad].forEach(v=>s+=`<text class="tx" x="2" y="${y(v)+4}">${fmt(v)}</text>`);
+  if(goal!=null)s+=`<line class="gl" x1="${L}" x2="${W-R}" y1="${y(goal)}" y2="${y(goal)}"/><text class="tx" x="${W-R-70}" y="${y(goal)-5}">goal ${fmt(goal)}</text>`;
+  s+=`<polyline class="ln" points="${pts.map((p,i)=>x(i)+','+y(p.v)).join(' ')}"/>`;
+  pts.forEach((p,i)=>s+=`<circle class="dt" cx="${x(i)}" cy="${y(p.v)}" r="3.5"><title>${p.d}: ${p.v} ${unit}</title></circle>`);
+  s+=`<text class="tx" x="${L}" y="${H-6}">${pts[0].d.slice(5)}</text><text class="tx" x="${W-R-34}" y="${H-6}">${pts[pts.length-1].d.slice(5)}</text></svg>`;return s}
+
+function bars(fn,t,mode){
+  const days=[];for(let i=13;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);days.push(iso(d))}
+  const vals=days.map(fn),mx=Math.max(...vals,t||0,1);
+  return `<div class="bars">${vals.map((v,i)=>{const c=t?(mode==='cal'?(v>t?'over':(v>0?'hit':'')):(v>=t?'hit':'')):'';return `<b class="${c}" style="height:${v/mx*100}%" title="${days[i]}: ${Math.round(v)}"></b>`}).join('')}</div><div class="mute">Last 14 days${t?' · goal '+Math.round(t).toLocaleString():''}</div>`}
+
+function viewProgress(){
+  const g=G();
+  const wd=dates().filter(d=>S.days[d].weight!=null),avg7=(()=>{const l=wd.slice(-7).map(d=>S.days[d].weight);return l.length?l.reduce((a,b)=>a+b,0)/l.length:null})();
+  const start=g.start!=null?g.start:(wd.length?S.days[wd[0]].weight:null),now=latest('weight');
+  let h=`<h2>Weight</h2><div class="card">${chart('weight',g.weight,'kg')}<div class="lbl"><span>Change since start</span><span>${start!=null&&now!=null?fmt(now-start)+' kg':'–'}</span></div><div class="lbl"><span>7-day average</span><span>${fmt(avg7)} kg</span></div></div>`;
+  h+=`<h2>Calories</h2><div class="card">${bars(eaten,g.cal,'cal')}</div><h2>Steps</h2><div class="card">${bars(d=>gd(d).steps||0,g.steps)}</div>`;
+  ['fat','muscle'].forEach(k=>{if(dates().some(d=>S.days[d][k]!=null))h+=`<h2>${k==='fat'?'Body fat %':'Muscle %'}</h2><div class="card">${chart(k,g[k],'%')}</div>`});
+  h+=`<h2>Lifts</h2>`;
+  if(!S.plan.length)h+=`<div class="card mute">Add exercises in the Gym tab to track strength.</div>`;
+  S.plan.forEach(e=>{
+    const ds=Object.keys(S.sess).filter(d=>(S.sess[d][e.id]||[]).length).sort().slice(-6);
+    const tops=ds.map(d=>Math.max(...S.sess[d][e.id].map(s=>s.w)));
+    h+=`<div class="card"><div class="lbl"><b>${esc(e.name)}</b><span class="mute">Goal ${fmt(e.wt)} kg</span></div><div class="mute">${tops.length?'Top set by session: '+tops.join(' → ')+' kg':'No sets logged yet'}</div></div>`});
+  return h}
+
+function render(){
+  const v={today:viewToday,gym:viewGym,goals:viewGoals,progress:viewProgress}[tab]();
+  $('app').innerHTML=v;
+  $('nav').innerHTML=[['today','Today'],['gym','Gym'],['progress','Progress'],['goals','Goals']].map(([k,l])=>`<button class="${tab===k?'on':''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}
+
+const shift=n=>{const d=parse(cur);d.setDate(d.getDate()+n);cur=iso(d)};
+const A={
+  tab:e=>{tab=e.dataset.t},
+  prev:()=>shift(-1),next:()=>shift(1),
+  date:()=>{if($('dt').value)cur=$('dt').value},
+  saveStats:()=>{const d=setDay(cur);[['w','weight'],['s','steps'],['f','fat'],['m','muscle']].forEach(([i,k])=>{const v=val(i);if(v==null)delete d[k];else d[k]=v})},
+  addMeal:()=>{const k=val('mk');if(k==null||k<0)return;setDay(cur).meals.push({l:$('ml').value.trim(),k:Math.round(k)})},
+  delMeal:e=>{setDay(cur).meals.splice(+e.dataset.i,1)},
+  saveGoals:()=>{S.goals={weight:val('gw'),start:val('gsw'),cal:val('gc'),steps:val('gs'),fat:val('gf'),muscle:val('gm'),date:$('gdt').value||null};tab='today'},
+  addEx:()=>{const n=$('en').value.trim();if(!n)return;S.plan.push({id:'e'+Date.now(),name:n,sets:val('es')||3,reps:val('er')||8,wt:val('ew')||0})},
+  delEx:e=>{if(confirm('Remove this exercise from your plan? Logged sets are kept.'))S.plan=S.plan.filter(x=>x.id!==e.dataset.id)},
+  addSet:e=>{const id=e.dataset.id,w=val('sw'+id),r=val('sr'+id);if(w==null||r==null)return;((S.sess[cur]=S.sess[cur]||{})[id]=(S.sess[cur][id]||[])).push({w,r})},
+  delSet:e=>{S.sess[cur][e.dataset.id].splice(+e.dataset.i,1)},
+  wipe:()=>{if(confirm('Delete all goals, logs and workouts?'))S={goals:{},days:{},plan:[],sess:{}}}
+};
+function run(el,type){const a=el.dataset.act;if(!A[a])return;A[a](el);save();render()}
+document.addEventListener('click',e=>{const el=e.target.closest('button[data-act]');if(el)run(el)});
+document.addEventListener('change',e=>{if(e.target.dataset&&e.target.dataset.act==='date')run(e.target)});
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'&&e.target.type!=='date'){const b=e.target.closest('.card')&&e.target.parentElement.parentElement.querySelector('button[data-act]');if(b)b.click()}});
+render();
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
