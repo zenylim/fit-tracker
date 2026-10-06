@@ -26,8 +26,8 @@ h2{font-size:22px;margin:20px 0 8px}
 .top input{flex:1;text-align:center}
 .row{display:flex;gap:8px;align-items:flex-end;margin:8px 0;flex-wrap:wrap}
 .row>label{flex:1;min-width:84px;font-size:13px;color:var(--mute)}
-input{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-top:3px}
-input:focus-visible,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+input,select{width:100%;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-top:3px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
 button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:9px 14px;background:var(--acc);color:var(--acc-ink);cursor:pointer}
 button.ghost{background:transparent;color:var(--mute);border:1px solid var(--line);padding:8px 12px}
 button.x{background:none;color:var(--mute);padding:2px 8px;font-size:18px}
@@ -55,7 +55,7 @@ svg{width:100%;height:auto;display:block}
 <script>
 const K='fittracker1';
 let S=null;try{S=JSON.parse(localStorage.getItem(K))}catch(e){}
-S=S||{goals:{},days:{},plan:[],sess:{}};
+S=S||{goals:{},days:{},plan:[],sess:{}};S.assign=S.assign||{};
 const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
 const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 const parse=s=>{const[a,b,c]=s.split('-').map(Number);return new Date(a,b-1,c)};
@@ -99,19 +99,46 @@ function viewToday(){
 function lastSession(id){const ds=Object.keys(S.sess).filter(x=>x<cur&&(S.sess[x][id]||[]).length).sort();return ds.length?{d:ds[ds.length-1],sets:S.sess[ds[ds.length-1]][id]}:null}
 function priorMax(id){let m=0;for(const x in S.sess)if(x<cur)(S.sess[x][id]||[]).forEach(s=>{if(s.w>m)m=s.w});return m}
 
+const PROGRAM=[
+{n:'Push',x:[['Bench press',3,'5-8'],['Incline DB press',3,'8-10'],['Shoulder press',3,'6-10'],['Lateral raise',3,'12-15'],['Triceps pushdown',3,'10-12'],['Overhead extension',2,'12']]},
+{n:'Pull',x:[['Weighted pull-up / lat pulldown',3,'6-10'],['Barbell / chest-supported row',3,'6-10'],['Cable row',3,'10-12'],['Rear delt fly',3,'12-15'],['Barbell / EZ curl',3,'8-10'],['Hammer curl',2,'10-12']]},
+{n:'Legs',x:[['Squat',3,'5-8',1],['Romanian deadlift',3,'8-10',1],['Leg press',3,'10-12',1],['Leg curl',3,'10-12',1],['Calf raise',4,'10-15',1]]},
+{n:'Upper',x:[['Incline barbell press',3,'6-8'],['Pulldown',3,'8-10'],['Dips / machine press',2,'8-12'],['DB row',2,'10'],['Lateral raise',3,'15'],['Biceps + triceps superset',2,'12']]},
+{n:'Lower + core',x:[['Front squat / hack squat',3,'8',1],['Hip thrust',3,'8-10',1],['Leg extension',3,'12-15',1],['Seated calf raise',3,'15',1],['Hanging leg raise',3,'10-15']]}];
+const NOTES=['Progression: when you hit the top of the rep range on every set, add 2.5 kg (upper body) or 5 kg (lower body). Stay 1-2 reps short of failure on compounds, 0-1 on isolations.','Volume: about 10-14 hard sets per muscle per week. Do not add more in a deficit.','Rest: 2-3 min on compounds, 60-90 s on isolations.','Warm-up: 2 ramp-up sets before the first compound.','Cardio: 2 × 20-30 min easy (incline walk or bike), after lifting or on a separate day. Do not increase it to make up for overeating.','Muscle-keeping signal: if main lifts drop more than 5-10% for two weeks in a row, raise calories by 150 and sleep more.','Recovery: 7-8 h sleep and one full rest day (take the lighter day off if you are drained).'];
+function exId(n,l,s,r){let e=S.plan.find(x=>x.name.toLowerCase()===n.toLowerCase());if(!e){e={id:'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:n,sets:s||3,reps:r||'8',wt:0,l:l?1:0};S.plan.push(e)}else if(e.l==null)e.l=l?1:0;return e.id}
+function itemsFor(d){
+  const a=S.assign[d];
+  if(a)return a.items.map(it=>({e:S.plan.find(x=>x.id===it.id),sets:it.sets,reps:it.reps})).filter(o=>o.e);
+  return Object.keys(S.sess[d]||{}).filter(id=>(S.sess[d][id]||[]).length).map(id=>S.plan.find(x=>x.id===id)).filter(Boolean).map(e=>({e,sets:e.sets,reps:e.reps}))}
+function ensure(){if(!S.assign[cur])S.assign[cur]={name:'Custom workout',items:itemsFor(cur).map(o=>({id:o.e.id,sets:o.sets,reps:o.reps}))}}
+function nextDay(){const ds=Object.keys(S.assign).filter(d=>d<cur&&S.assign[d].day!=null).sort();return ds.length?(S.assign[ds[ds.length-1]].day+1)%PROGRAM.length:0}
+const dn=()=>`<div class="top"><button class="ghost" data-act="prev">‹</button><input type="date" id="dt" value="${cur}" data-act="date"><button class="ghost" data-act="next">›</button></div>`;
+
+function viewPlan(){
+  const a=S.assign[cur],nx=nextDay();
+  let h=dn()+`<p class="mute">Pick the workout for this date. Its exercises load into the Gym tab, so there is no typing.</p>`;
+  PROGRAM.forEach((D,i)=>{const on=a&&a.day===i;
+    h+=`<div class="card"><div class="lbl" style="align-items:center"><b>Day ${i+1} · ${D.n}${i===nx&&!on?'<span class="pr">NEXT</span>':''}</b><button class="${on?'ghost':''}" data-act="useDay" data-d="${i}">${on?'Selected':'Use for this date'}</button></div>`+D.x.map(x=>`<div class="li"><span>${x[0]}</span><span class="mute">${x[1]}×${x[2]}</span></div>`).join('')+'</div>'});
+  return h+`<h2>Training rules</h2><div class="card">${NOTES.map(n=>`<div class="li"><span>${n}</span></div>`).join('')}</div>`}
+
 function viewGym(){
-  let h=`<div class="top"><button class="ghost" data-act="prev">‹</button><input type="date" id="dt" value="${cur}" data-act="date"><button class="ghost" data-act="next">›</button></div>`;
-  if(!S.plan.length)h+=`<div class="card">No exercises yet. Add your first one below, with the sets, reps and weight you are aiming for.</div>`;
-  S.plan.forEach(e=>{
-    const sets=(S.sess[cur]||{})[e.id]||[],ls=lastSession(e.id),pm=priorMax(e.id);
-    const done=sets.length;
-    h+=`<div class="card"><div class="lbl"><b>${esc(e.name)}</b><span class="mute">Goal ${e.sets}×${e.reps} @ ${fmt(e.wt)} kg</span></div>`;
-    h+=`<div class="bar"><i class="${done>=e.sets?'good':''}" style="width:${Math.min(100,done/e.sets*100)}%"></i></div><div class="mute">${done}/${e.sets} sets${ls?` · Last (${ls.d.slice(5)}): ${ls.sets.map(s=>s.w+'×'+s.r).join(', ')}`:''}</div>`;
+  const a=S.assign[cur],list=itemsFor(cur);
+  let h=dn()+`<div class="card"><div class="lbl" style="align-items:center"><b>${a?esc(a.name):'No workout picked'}</b><button class="ghost" data-act="tab" data-t="plan">${a?'Change':'Pick from plan'}</button></div></div>`;
+  list.forEach(({e,sets:ns,reps:nr})=>{
+    const sets=(S.sess[cur]||{})[e.id]||[],ls=lastSession(e.id),pm=priorMax(e.id),done=sets.length;
+    const top=parseInt(String(nr).split('-').pop())||0;
+    const hint=ls&&top&&ls.sets.length>=ns&&ls.sets.every(s=>s.r>=top)?`Hit ${top} reps on every set last time. Try ${fmt(Math.max(...ls.sets.map(s=>s.w))+(e.l?5:2.5))} kg.`:'';
+    h+=`<div class="card"><div class="lbl"><b>${esc(e.name)}</b><span class="mute">Goal ${ns}×${esc(nr)}${e.wt?' @ '+fmt(e.wt)+' kg':''}</span></div>`;
+    h+=`<div class="bar"><i class="${done>=ns?'good':''}" style="width:${Math.min(100,done/ns*100)}%"></i></div><div class="mute">${done}/${ns} sets${ls?` · Last (${ls.d.slice(5)}): ${ls.sets.map(s=>s.w+'×'+s.r).join(', ')}`:''}</div>`;
+    if(hint)h+=`<div style="color:var(--good);font-size:14px;font-weight:600">${hint}</div>`;
     sets.forEach((s,i)=>h+=`<div class="li"><span>Set ${i+1}: ${s.w} kg × ${s.r}${pm>0&&s.w>pm?'<span class="pr">PR</span>':''}</span><button class="x" data-act="delSet" data-id="${e.id}" data-i="${i}" aria-label="Delete set">×</button></div>`);
     const lastSet=sets[sets.length-1]||(ls&&ls.sets[0]);
-    h+=`<div class="row">${inp('sw'+e.id,'Weight (kg)',lastSet?lastSet.w:e.wt,0.5)}${inp('sr'+e.id,'Reps',lastSet?lastSet.r:e.reps,1)}<button data-act="addSet" data-id="${e.id}">Log set</button></div>`;
-    h+=`<button class="ghost" data-act="delEx" data-id="${e.id}">Remove exercise</button></div>`});
-  h+=`<div class="card"><b>Add exercise</b><div class="row"><label>Name<input id="en" placeholder="e.g. Bench press"></label></div><div class="row">${inp('es','Goal sets',null,1)}${inp('er','Goal reps',null,1)}${inp('ew','Goal kg',null,0.5)}<button data-act="addEx">Add</button></div></div>`;
+    h+=`<div class="row">${inp('sw'+e.id,'Weight (kg)',lastSet?lastSet.w:(e.wt||null),0.5)}${inp('sr'+e.id,'Reps',lastSet?lastSet.r:(parseInt(nr)||null),1)}<button data-act="addSet" data-id="${e.id}">Log set</button></div>`;
+    h+=`<div style="display:flex;gap:8px"><button class="ghost" data-act="editWt" data-id="${e.id}">Set goal kg</button>${a?`<button class="ghost" data-act="rmEx" data-id="${e.id}">Remove</button>`:''}</div></div>`});
+  const avail=S.plan.filter(x=>!list.some(o=>o.e.id===x.id));
+  if(avail.length)h+=`<div class="card"><b>Add from your exercises</b><div class="row"><label>Exercise<select id="lib">${avail.map(x=>`<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select></label><button data-act="addLib">Add</button></div></div>`;
+  h+=`<div class="card"><b>Add a new exercise</b><div class="row"><label>Name<input id="en" placeholder="e.g. Cable crossover"></label></div><div class="row">${inp('es','Goal sets',null,1)}<label>Goal reps<input id="er" placeholder="8 or 6-10"></label>${inp('ew','Goal kg',null,0.5)}<button data-act="addEx">Add</button></div></div>`;
   return h}
 
 function viewGoals(){
@@ -158,9 +185,9 @@ function viewProgress(){
   return h}
 
 function render(){
-  const v={today:viewToday,gym:viewGym,goals:viewGoals,progress:viewProgress}[tab]();
+  const v={today:viewToday,plan:viewPlan,gym:viewGym,goals:viewGoals,progress:viewProgress}[tab]();
   $('app').innerHTML=v;
-  $('nav').innerHTML=[['today','Today'],['gym','Gym'],['progress','Progress'],['goals','Goals']].map(([k,l])=>`<button class="${tab===k?'on':''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}
+  $('nav').innerHTML=[['today','Today'],['plan','Plan'],['gym','Gym'],['progress','Progress'],['goals','Goals']].map(([k,l])=>`<button class="${tab===k?'on':''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}
 
 const shift=n=>{const d=parse(cur);d.setDate(d.getDate()+n);cur=iso(d)};
 const A={
@@ -171,11 +198,14 @@ const A={
   addMeal:()=>{const k=val('mk'),p=val('mp');if((k==null&&p==null)||k<0||p<0)return;setDay(cur).meals.push({l:$('ml').value.trim(),k:Math.round(k||0),p:Math.round((p||0)*10)/10})},
   delMeal:e=>{setDay(cur).meals.splice(+e.dataset.i,1)},
   saveGoals:()=>{S.goals={weight:val('gw'),start:val('gsw'),cal:val('gc'),protein:val('gp'),steps:val('gs'),fat:val('gf'),muscle:val('gm'),date:$('gdt').value||null};tab='today'},
-  addEx:()=>{const n=$('en').value.trim();if(!n)return;S.plan.push({id:'e'+Date.now(),name:n,sets:val('es')||3,reps:val('er')||8,wt:val('ew')||0})},
-  delEx:e=>{if(confirm('Remove this exercise from your plan? Logged sets are kept.'))S.plan=S.plan.filter(x=>x.id!==e.dataset.id)},
+  addEx:()=>{const n=$('en').value.trim();if(!n)return;const w=val('ew'),id=exId(n,0,val('es'),$('er').value.trim());if(w)S.plan.find(x=>x.id===id).wt=w;ensure();if(!S.assign[cur].items.some(i=>i.id===id))S.assign[cur].items.push({id,sets:val('es')||3,reps:$('er').value.trim()||'8'})},
+  addLib:()=>{const id=$('lib').value,x=S.plan.find(y=>y.id===id);ensure();if(x&&!S.assign[cur].items.some(i=>i.id===id))S.assign[cur].items.push({id,sets:x.sets,reps:x.reps})},
+  rmEx:b=>{S.assign[cur].items=S.assign[cur].items.filter(i=>i.id!==b.dataset.id)},
+  editWt:b=>{const x=S.plan.find(y=>y.id===b.dataset.id),v=prompt('Goal weight for '+x.name+' (kg)',x.wt||'');if(v!==null&&!isNaN(parseFloat(v)))x.wt=parseFloat(v)},
+  useDay:b=>{const i=+b.dataset.d,D=PROGRAM[i],has=Object.values(S.sess[cur]||{}).some(v=>v.length);if(has&&!confirm('This date already has logged sets. Switch workout? Logged sets are kept.'))return;S.assign[cur]={day:i,name:'Day '+(i+1)+' · '+D.n,items:D.x.map(([n,st,rp,l])=>({id:exId(n,l,st,rp),sets:st,reps:rp}))};tab='gym'},
   addSet:e=>{const id=e.dataset.id,w=val('sw'+id),r=val('sr'+id);if(w==null||r==null)return;((S.sess[cur]=S.sess[cur]||{})[id]=(S.sess[cur][id]||[])).push({w,r})},
   delSet:e=>{S.sess[cur][e.dataset.id].splice(+e.dataset.i,1)},
-  wipe:()=>{if(confirm('Delete all goals, logs and workouts?'))S={goals:{},days:{},plan:[],sess:{}}}
+  wipe:()=>{if(confirm('Delete all goals, logs and workouts?'))S={goals:{},days:{},plan:[],sess:{},assign:{}}}
 };
 function run(el,type){const a=el.dataset.act;if(!A[a])return;A[a](el);save();render()}
 document.addEventListener('click',e=>{const el=e.target.closest('button[data-act]');if(el)run(el)});
