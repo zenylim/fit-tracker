@@ -65,6 +65,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const val=id=>{const e=$(id);if(!e||e.value==='')return null;const n=parseFloat(e.value);return isNaN(n)?null:n};
 const gd=d=>S.days[d]||{meals:[]};
 const setDay=d=>S.days[d]||(S.days[d]={meals:[]});
+const prot=d=>(gd(d).meals||[]).reduce((a,m)=>a+(m.p||0),0);
 const eaten=d=>(gd(d).meals||[]).reduce((a,m)=>a+m.k,0);
 const dates=()=>Object.keys(S.days).sort();
 function latest(k){const ds=dates().reverse();for(const d of ds){if(S.days[d][k]!=null)return S.days[d][k]}return null}
@@ -88,10 +89,10 @@ function viewToday(){
   if(wk!=null&&dl>0)h+=`<p class="mute">Pace needed: ${fmt(Math.abs(wk))} kg per week ${wk>0?'loss':'gain'}. ${Math.abs(wk)>1?'That is aggressive; consider a later date or a smaller target.':''}</p>`;
   if(!g.weight&&!g.cal)h+=`<div class="card">Start in <b>Goals</b> to set your targets and deadline.</div>`;
   h+=`<div class="top"><button class="ghost" data-act="prev">‹</button><input type="date" id="dt" value="${cur}" data-act="date"><button class="ghost" data-act="next">›</button></div>`;
-  h+=`<div class="card">${bar('Calories',eaten(cur),g.cal,'kcal','cal')}${bar('Steps',d.steps||0,g.steps,'steps')}</div>`;
+  h+=`<div class="card">${bar('Calories',eaten(cur),g.cal,'kcal','cal')}${bar('Protein',prot(cur),g.protein,'g')}${bar('Steps',d.steps||0,g.steps,'steps')}</div>`;
   h+=`<div class="card"><b>Daily stats</b><div class="row">${inp('w','Weight (kg)',d.weight,0.1)}${inp('s','Steps',d.steps,1)}</div><div class="row">${inp('f','Body fat %',d.fat,0.1)}${inp('m','Muscle %',d.muscle,0.1)}<button data-act="saveStats">Save</button></div></div>`;
-  h+=`<div class="card"><b>Food log</b><div class="row"><label>Food<input id="ml" placeholder="e.g. Chicken rice"></label>${inp('mk','kcal',null,1)}<button data-act="addMeal">Add</button></div>`;
-  (d.meals||[]).forEach((m,i)=>h+=`<div class="li"><span>${esc(m.l||'Food')}</span><span>${m.k} kcal <button class="x" data-act="delMeal" data-i="${i}" aria-label="Delete">×</button></span></div>`);
+  h+=`<div class="card"><b>Food log</b><div class="row"><label>Food<input id="ml" placeholder="e.g. Chicken rice"></label>${inp('mk','kcal',null,1)}${inp('mp','Protein (g)',null,1)}<button data-act="addMeal">Add</button></div>`;
+  (d.meals||[]).forEach((m,i)=>h+=`<div class="li"><span>${esc(m.l||'Food')}</span><span>${m.k} kcal · ${m.p||0} g protein <button class="x" data-act="delMeal" data-i="${i}" aria-label="Delete">×</button></span></div>`);
   if(!(d.meals||[]).length)h+=`<p class="mute">Nothing logged yet. Add your first meal.</p>`;
   return h+'</div>'}
 
@@ -116,8 +117,8 @@ function viewGym(){
 function viewGoals(){
   const g=G();
   return `<h2>Your targets</h2><div class="card"><div class="row">${inp('gw','Goal weight (kg)',g.weight,0.1)}${inp('gsw','Start weight (kg)',g.start!=null?g.start:latest('weight'),0.1)}</div>
-  <div class="row">${inp('gc','Daily calories',g.cal,1)}${inp('gs','Daily steps',g.steps,1)}</div>
-  <div class="row">${inp('gf','Body fat % goal',g.fat,0.1)}${inp('gm','Muscle % goal',g.muscle,0.1)}</div>
+  <div class="row">${inp('gc','Daily calories',g.cal,1)}${inp('gp','Daily protein (g)',g.protein,1)}</div>
+  <div class="row">${inp('gs','Daily steps',g.steps,1)}${inp('gf','Body fat % goal',g.fat,0.1)}${inp('gm','Muscle % goal',g.muscle,0.1)}</div>
   <div class="row"><label>Goal date<input id="gdt" type="date" value="${g.date||iso(new Date(new Date().getFullYear(),new Date().getMonth()+1,0))}"></label><button data-act="saveGoals">Save goals</button></div>
   <p class="mute">Set the sets, reps and weight targets for each lift in the Gym tab.</p></div>
   <div class="card"><b>Where you are now</b><div class="lbl"><span>Weight</span><span>${fmt(latest('weight'))} → ${fmt(g.weight)} kg</span></div><div class="lbl"><span>Body fat</span><span>${fmt(latest('fat'))} → ${fmt(g.fat)} %</span></div><div class="lbl"><span>Muscle</span><span>${fmt(latest('muscle'))} → ${fmt(g.muscle)} %</span></div></div>
@@ -146,7 +147,7 @@ function viewProgress(){
   const wd=dates().filter(d=>S.days[d].weight!=null),avg7=(()=>{const l=wd.slice(-7).map(d=>S.days[d].weight);return l.length?l.reduce((a,b)=>a+b,0)/l.length:null})();
   const start=g.start!=null?g.start:(wd.length?S.days[wd[0]].weight:null),now=latest('weight');
   let h=`<h2>Weight</h2><div class="card">${chart('weight',g.weight,'kg')}<div class="lbl"><span>Change since start</span><span>${start!=null&&now!=null?fmt(now-start)+' kg':'–'}</span></div><div class="lbl"><span>7-day average</span><span>${fmt(avg7)} kg</span></div></div>`;
-  h+=`<h2>Calories</h2><div class="card">${bars(eaten,g.cal,'cal')}</div><h2>Steps</h2><div class="card">${bars(d=>gd(d).steps||0,g.steps)}</div>`;
+  h+=`<h2>Calories</h2><div class="card">${bars(eaten,g.cal,'cal')}</div><h2>Protein</h2><div class="card">${bars(prot,g.protein)}</div><h2>Steps</h2><div class="card">${bars(d=>gd(d).steps||0,g.steps)}</div>`;
   ['fat','muscle'].forEach(k=>{if(dates().some(d=>S.days[d][k]!=null))h+=`<h2>${k==='fat'?'Body fat %':'Muscle %'}</h2><div class="card">${chart(k,g[k],'%')}</div>`});
   h+=`<h2>Lifts</h2>`;
   if(!S.plan.length)h+=`<div class="card mute">Add exercises in the Gym tab to track strength.</div>`;
@@ -167,9 +168,9 @@ const A={
   prev:()=>shift(-1),next:()=>shift(1),
   date:()=>{if($('dt').value)cur=$('dt').value},
   saveStats:()=>{const d=setDay(cur);[['w','weight'],['s','steps'],['f','fat'],['m','muscle']].forEach(([i,k])=>{const v=val(i);if(v==null)delete d[k];else d[k]=v})},
-  addMeal:()=>{const k=val('mk');if(k==null||k<0)return;setDay(cur).meals.push({l:$('ml').value.trim(),k:Math.round(k)})},
+  addMeal:()=>{const k=val('mk'),p=val('mp');if((k==null&&p==null)||k<0||p<0)return;setDay(cur).meals.push({l:$('ml').value.trim(),k:Math.round(k||0),p:Math.round((p||0)*10)/10})},
   delMeal:e=>{setDay(cur).meals.splice(+e.dataset.i,1)},
-  saveGoals:()=>{S.goals={weight:val('gw'),start:val('gsw'),cal:val('gc'),steps:val('gs'),fat:val('gf'),muscle:val('gm'),date:$('gdt').value||null};tab='today'},
+  saveGoals:()=>{S.goals={weight:val('gw'),start:val('gsw'),cal:val('gc'),protein:val('gp'),steps:val('gs'),fat:val('gf'),muscle:val('gm'),date:$('gdt').value||null};tab='today'},
   addEx:()=>{const n=$('en').value.trim();if(!n)return;S.plan.push({id:'e'+Date.now(),name:n,sets:val('es')||3,reps:val('er')||8,wt:val('ew')||0})},
   delEx:e=>{if(confirm('Remove this exercise from your plan? Logged sets are kept.'))S.plan=S.plan.filter(x=>x.id!==e.dataset.id)},
   addSet:e=>{const id=e.dataset.id,w=val('sw'+id),r=val('sr'+id);if(w==null||r==null)return;((S.sess[cur]=S.sess[cur]||{})[id]=(S.sess[cur][id]||[])).push({w,r})},
